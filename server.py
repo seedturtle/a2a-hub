@@ -176,11 +176,12 @@ async def invoke(request: Request, x_api_key: str = Header(None)):
     endpoint = f"{target_url}/v1/chat/completions"
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {gateway_token}"
+        "Authorization": f"Bearer {gateway_token}",
+            "x-openclaw-agent-id": "main"
     }
     payload = {
-        "input": message,
-        "instructions": f"[A2A Hub] Message from agent '{sender_id}'"
+        "model": "openclaw",
+        "messages": [{"role": "system", "content": f"[A2A Hub] from agent '{sender_id}'"}, {"role": "user", "content": message}]
     }
 
     response_text = ""
