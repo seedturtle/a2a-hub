@@ -194,9 +194,11 @@ async def invoke(request: Request, x_api_key: str = Header(None)):
     endpoint = f"{target_url}/v1/chat/completions"
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {gateway_token}",
-            "x-openclaw-agent-id": "main"
+        "x-openclaw-agent-id": "main"
     }
+    # Only add Authorization header if gateway_token is non-empty
+    if gateway_token:
+        headers["Authorization"] = f"Bearer {gateway_token}"
     payload = {
         "model": "openclaw",
         "messages": [{"role": "system", "content": f"[A2A Hub] from agent '{sender_id}'"}, {"role": "user", "content": message}]
