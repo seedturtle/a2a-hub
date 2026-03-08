@@ -13,6 +13,7 @@ HUB_URL = os.environ.get("HUB_URL", "http://localhost:8000")
 ADMIN_KEY = os.environ.get("ADMIN_KEY", "admin-secret")
 DB_PATH = os.environ.get("DB_PATH", "/data/hub.db")
 SKIP_API_KEY_CHECK = os.environ.get("SKIP_API_KEY_CHECK", "false").lower() == "true"
+WHITELIST_ONLY = os.environ.get("WHITELIST_ONLY", "true").lower() == "true"
 
 # ---- DB init ----
 def get_db():
@@ -160,17 +161,16 @@ async def invoke(request: Request, x_api_key: str = Header(None)):
 
     if SKIP_API_KEY_CHECK:
         # Relaxed mode: skip API key validation entirely
-        # Try to identify sender from body, fall back to "anonymous"
         pass
     elif x_api_key == ADMIN_KEY:
-        # admin calling
+        # admin calling — always allowed
         pass
     else:
-        # check if it's a valid agent api_key
+        # Whitelist mode: only registered agents (by api_key) are allowed
         sender_agent_row = conn.execute("SELECT * FROM agents WHERE api_key=?", (x_api_key,)).fetchone()
         if not sender_agent_row:
             conn.close()
-            raise HTTPException(status_code=403, detail="Invalid API key")
+            raise HTTPException(status_code=403, detail="Access denied: only registered agents may use this hub")
 
     body = await request.json()
     # Support both field naming styles
@@ -236,7 +236,12 @@ async def dashboard(request: Request, admin_key: str = ""):
     agents = conn.execute("SELECT id, name, url, description, registered_at FROM agents ORDER BY registered_at DESC").fetchall()
     logs = conn.execute("SELECT * FROM logs ORDER BY created_at DESC LIMIT 100").fetchall()
     conn.close()
-    skip_mode_badge = "<span style='background:#f59e0b;color:#fff;border-radius:12px;padding:2px 10px;font-size:12px;margin-left:8px'>SKIP_KEY_CHECK ON</span>" if SKIP_API_KEY_CHECK else ""
+    if SKIP_API_KEY_CHECK:
+        skip_mode_badge = "<span style='background:#f59e0b;color:#fff;border-radius:12px;padding:2px 10px;font-size:12px;margin-left:8px'>⚠ SKIP_KEY_CHECK ON</span>"
+    elif WHITELIST_ONLY:
+        skip_mode_badge = "<span style='background:#22c55e;color:#fff;border-radius:12px;padding:2px 10px;font-size:12px;margin-left:8px'>🔒 WHITELIST MODE</span>"
+    else:
+        skip_mode_badge = ""
     agents_html = "".join([
         f"<tr><td>{a['id']}</td><td>{a['name']}</td><td><a href='{a['url']}' target='_blank'>{a['url']}</a></td><td>{a['description'] or ''}</td><td>{a['registered_at']}</td></tr>"
         for a in agents
