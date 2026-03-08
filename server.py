@@ -28,6 +28,7 @@ def init_db():
             name TEXT NOT NULL,
             url TEXT NOT NULL,
             gateway_token TEXT,
+            api_key TEXT,
             description TEXT,
             registered_at TEXT
         )
@@ -44,6 +45,11 @@ def init_db():
             created_at TEXT
         )
     """)
+    # migrate: add api_key column if not exists
+    try:
+        conn.execute("ALTER TABLE agents ADD COLUMN api_key TEXT")
+    except Exception:
+        pass
     conn.commit()
     conn.close()
 
@@ -57,7 +63,7 @@ async def agent_card():
         "description": "Central A2A hub for routing messages between OpenClaw agents.",
         "url": HUB_URL,
         "protocolVersion": "0.2.6",
-        "version": "2.0.0"
+        "version": "2.1.0"
     }
 
 # ---- Health ----
@@ -71,24 +77,24 @@ async def register_agent(request: Request, x_admin_key: str = Header(None)):
     if x_admin_key != ADMIN_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
     body = await request.json()
-    name = body.get("name")
-    url = body.get("url")           # OpenClaw base URL, e.g. https://kiritu.zeabur.app
-    gateway_token = body.get("gateway_token", "")  # OPENCLAW_GATEWAY_TOKEN
+    agent_id = body.get("id") or body.get("name", "").lower().replace(" ", "-")
+    name = body.get("name") or agent_id
+    url = body.get("url")
+    gateway_token = body.get("gateway_token", "")
     description = body.get("description", "")
     if not name or not url:
         raise HTTPException(status_code=400, detail="name and url are required")
-    agent_id = name.lower().replace(" ", "-")
     api_key = "sk-" + secrets.token_hex(16)
     conn = get_db()
     conn.execute(
-        "INSERT OR REPLACE INTO agents (id, name, url, gateway_token, description, registered_at) VALUES (?,?,?,?,?,?)",
-        (agent_id, name, url, gateway_token, description, datetime.utcnow().isoformat())
+        "INSERT OR REPLACE INTO agents (id, name, url, gateway_token, api_key, description, registered_at) VALUES (?,?,?,?,?,?,?)",
+        (agent_id, name, url, gateway_token, api_key, description, datetime.utcnow().isoformat())
     )
     conn.commit()
     conn.close()
     return {"agent_id": agent_id, "api_key": api_key, "message": f"Agent '{name}' registered."}
 
-# ---- Update Agent URL / Token ----
+# ---- Update Agent ----
 @app.patch("/agents/{agent_id}")
 async def update_agent(agent_id: str, request: Request, x_admin_key: str = Header(None)):
     if x_admin_key != ADMIN_KEY:
@@ -131,24 +137,32 @@ async def delete_agent(agent_id: str, x_admin_key: str = Header(None)):
     conn.close()
     return {"message": f"Agent '{agent_id}' deleted."}
 
-# ---- Invoke: route message via OpenClaw /v1/responses HTTP API ----
+# ---- Invoke: route message to target agent ----
 @app.post("/invoke")
 async def invoke(request: Request, x_api_key: str = Header(None)):
     conn = get_db()
-    # Find sender by api_key stored in logs or by admin key
-    body = await request.json()
-    target_id = body.get("target_id")
-    message = body.get("message", "")
-    sender_id = body.get("sender_id", "unknown")
 
-    # Allow admin to invoke on behalf of any agent
-    if x_api_key != ADMIN_KEY:
-        conn.close()
-        raise HTTPException(status_code=403, detail="Invalid API key")
+    # Support both admin key and agent api_key
+    sender_agent_row = None
+    if x_api_key == ADMIN_KEY:
+        # admin calling
+        pass
+    else:
+        # check if it's a valid agent api_key
+        sender_agent_row = conn.execute("SELECT * FROM agents WHERE api_key=?", (x_api_key,)).fetchone()
+        if not sender_agent_row:
+            conn.close()
+            raise HTTPException(status_code=403, detail="Invalid API key")
+
+    body = await request.json()
+    # Support both field naming styles
+    target_id = body.get("target_id") or body.get("to_agent")
+    message = body.get("message", "")
+    sender_id = body.get("sender_id") or body.get("from_agent") or (sender_agent_row["id"] if sender_agent_row else "admin")
 
     if not target_id:
         conn.close()
-        raise HTTPException(status_code=400, detail="target_id is required")
+        raise HTTPException(status_code=400, detail="target_id (or to_agent) is required")
 
     target_row = conn.execute("SELECT * FROM agents WHERE id=?", (target_id,)).fetchone()
     if not target_row:
