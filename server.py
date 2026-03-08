@@ -172,8 +172,8 @@ async def invoke(request: Request, x_api_key: str = Header(None)):
     target_url = target_row["url"].rstrip("/")
     gateway_token = target_row["gateway_token"] or ""
 
-    # Call OpenClaw's /v1/responses HTTP API
-    endpoint = f"{target_url}/v1/responses"
+    # Call OpenClaw's /v1/chat/completions HTTP API
+    endpoint = f"{target_url}/v1/chat/completions"
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {gateway_token}"
