@@ -12,6 +12,7 @@ app = FastAPI(title="A2A Hub")
 HUB_URL = os.environ.get("HUB_URL", "http://localhost:8000")
 ADMIN_KEY = os.environ.get("ADMIN_KEY", "admin-secret")
 DB_PATH = os.environ.get("DB_PATH", "/data/hub.db")
+SKIP_API_KEY_CHECK = os.environ.get("SKIP_API_KEY_CHECK", "false").lower() == "true"
 
 # ---- DB init ----
 def get_db():
@@ -69,7 +70,7 @@ async def agent_card():
 # ---- Health ----
 @app.get("/health")
 async def health():
-    return {"status": "ok", "hub_url": HUB_URL}
+    return {"status": "ok", "hub_url": HUB_URL, "skip_api_key_check": SKIP_API_KEY_CHECK}
 
 # ---- Register Agent ----
 @app.post("/register")
@@ -137,14 +138,31 @@ async def delete_agent(agent_id: str, x_admin_key: str = Header(None)):
     conn.close()
     return {"message": f"Agent '{agent_id}' deleted."}
 
+# ---- Get Agent API Key (for agents to retrieve their own key) ----
+@app.get("/agents/{agent_id}/api-key")
+async def get_agent_api_key(agent_id: str, x_admin_key: str = Header(None)):
+    if x_admin_key != ADMIN_KEY:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+    conn = get_db()
+    row = conn.execute("SELECT api_key FROM agents WHERE id=?", (agent_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return {"agent_id": agent_id, "api_key": row["api_key"]}
+
 # ---- Invoke: route message to target agent ----
 @app.post("/invoke")
 async def invoke(request: Request, x_api_key: str = Header(None)):
     conn = get_db()
 
-    # Support both admin key and agent api_key
     sender_agent_row = None
-    if x_api_key == ADMIN_KEY:
+    sender_id = "unknown"
+
+    if SKIP_API_KEY_CHECK:
+        # Relaxed mode: skip API key validation entirely
+        # Try to identify sender from body, fall back to "anonymous"
+        pass
+    elif x_api_key == ADMIN_KEY:
         # admin calling
         pass
     else:
@@ -218,6 +236,7 @@ async def dashboard(request: Request, admin_key: str = ""):
     agents = conn.execute("SELECT id, name, url, description, registered_at FROM agents ORDER BY registered_at DESC").fetchall()
     logs = conn.execute("SELECT * FROM logs ORDER BY created_at DESC LIMIT 100").fetchall()
     conn.close()
+    skip_mode_badge = "<span style='background:#f59e0b;color:#fff;border-radius:12px;padding:2px 10px;font-size:12px;margin-left:8px'>SKIP_KEY_CHECK ON</span>" if SKIP_API_KEY_CHECK else ""
     agents_html = "".join([
         f"<tr><td>{a['id']}</td><td>{a['name']}</td><td><a href='{a['url']}' target='_blank'>{a['url']}</a></td><td>{a['description'] or ''}</td><td>{a['registered_at']}</td></tr>"
         for a in agents
@@ -237,7 +256,7 @@ async def dashboard(request: Request, admin_key: str = ""):
     tr:last-child td{{border-bottom:none}}
     .badge{{background:#22c55e;color:#fff;border-radius:12px;padding:2px 10px;font-size:12px}}
     </style></head><body>
-    <h2>A2A Hub Dashboard <span class='badge'>LIVE</span></h2>
+    <h2>A2A Hub Dashboard <span class='badge'>LIVE</span>{skip_mode_badge}</h2>
     <p>Hub URL: <strong>{HUB_URL}</strong></p>
     <h3>Registered Agents ({len(agents)})</h3>
     <table><tr><th>ID</th><th>Name</th><th>URL</th><th>Description</th><th>Registered At</th></tr>
