@@ -1,3 +1,5 @@
-a2a-python-sdk
-uvicorn
 fastapi
+uvicorn
+httpx
+jinja2
+python-multipart
