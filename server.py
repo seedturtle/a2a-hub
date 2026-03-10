@@ -245,7 +245,7 @@ async def dashboard(request: Request, admin_key: str = ""):
     else:
         skip_mode_badge = ""
     agents_html = "".join([
-        f"<tr><td>{a['id']}</td><td>{a['name']}</td><td><a href='{a['url']}' target='_blank'>{a['url']}</a></td><td>{a['description'] or ''}</td><td>{a['registered_at']}</td></tr>"
+        f"<tr><td>{a['id']}</td><td>{a['name']}</td><td><a href='{a['url']}' target='_blank'>{a['url']}</a></td><td>{a['description'] or ''}</td><td>{a['registered_at']}</td><td><button onclick=\"deleteAgent('{a['id']}')\">Delete</button></td></tr>"
         for a in agents
     ])
     logs_html = "".join([
@@ -266,8 +266,33 @@ async def dashboard(request: Request, admin_key: str = ""):
     <h2>A2A Hub Dashboard <span class='badge'>LIVE</span>{skip_mode_badge}</h2>
     <p>Hub URL: <strong>{HUB_URL}</strong></p>
     <h3>Registered Agents ({len(agents)})</h3>
-    <table><tr><th>ID</th><th>Name</th><th>URL</th><th>Description</th><th>Registered At</th></tr>
+    <table><tr><th>ID</th><th>Name</th><th>URL</th><th>Description</th><th>Registered At</th><th>Action</th></tr>
     {agents_html}</table>
+    <br>
+    <h3>Register New Agent</h3>
+    <div style='background:#fff;padding:16px;border-radius:8px;box-shadow:0 1px 4px #0001;max-width:600px'>
+    <form id='regForm'>
+    <div style='margin-bottom:8px'><label>ID: <input id='rId' style='width:200px;padding:4px' placeholder='e.g. john-connor'/></label></div>
+    <div style='margin-bottom:8px'><label>Name: <input id='rName' style='width:200px;padding:4px' placeholder='e.g. John Connor'/></label></div>
+    <div style='margin-bottom:8px'><label>URL: <input id='rUrl' style='width:300px;padding:4px' placeholder='https://...'/></label></div>
+    <div style='margin-bottom:8px'><label>Gateway Token: <input id='rToken' style='width:300px;padding:4px'/></label></div>
+    <div style='margin-bottom:8px'><label>Description: <input id='rDesc' style='width:300px;padding:4px'/></label></div>
+    <button type='button' onclick='registerAgent()' style='background:#4f46e5;color:#fff;border:none;padding:8px 20px;border-radius:6px;cursor:pointer'>Register</button>
+    <span id='regResult' style='margin-left:12px;font-size:13px'></span>
+    </form></div>
+    <script>
+    const ADMIN_KEY = '{admin_key}';
+    function deleteAgent(id) {{
+      if (!confirm('Delete agent: ' + id + '?')) return;
+      fetch('/agents/' + id, {{method:'DELETE', headers:{{'x-admin-key': ADMIN_KEY}}}})
+        .then(r=>r.json()).then(d=>{{ alert(d.message); location.reload(); }}).catch(e=>alert(e));
+    }}
+    function registerAgent() {{
+      const body = {{id: document.getElementById('rId').value, name: document.getElementById('rName').value, url: document.getElementById('rUrl').value, gateway_token: document.getElementById('rToken').value, description: document.getElementById('rDesc').value}};
+      fetch('/register', {{method:'POST', headers:{{'Content-Type':'application/json','x-admin-key': ADMIN_KEY}}, body: JSON.stringify(body)}})
+        .then(r=>r.json()).then(d=>{{ document.getElementById('regResult').textContent = JSON.stringify(d); location.reload(); }}).catch(e=>alert(e));
+    }}
+    </script>
     <br>
     <h3>Recent Conversations (last 100)</h3>
     <table><tr><th>Time</th><th>From</th><th>To</th><th>Message</th><th>Status</th><th>Response</th></tr>
