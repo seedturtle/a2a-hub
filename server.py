@@ -285,7 +285,10 @@ async def dashboard(request: Request, admin_key: str = ""):
             # Convert to Taiwan timezone
             taipei_tz = timezone(timedelta(hours=8))
             dt_taipei = dt.astimezone(taipei_tz)
-            return dt_taipei.strftime("%Y-%m-%d %H:%M:%S")
+            # Format: 週三 2026-03-11 12:23:45
+            weekday_names = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
+            weekday = weekday_names[dt_taipei.weekday()]
+            return f"{weekday} {dt_taipei.strftime('%Y-%m-%d %H:%M:%S')}"
         except:
             return utc_str
 
