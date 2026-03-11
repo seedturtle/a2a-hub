@@ -261,8 +261,23 @@ async def dashboard(request: Request, admin_key: str = ""):
         f"<tr><td>{a['id']}</td><td>{a['name']}</td><td><a href='{a['url']}' target='_blank'>{a['url']}</a></td><td>{a['description'] or ''}</td><td>{a['registered_at']}</td></tr>"
         for a in agents
     ])
+    def extract_response_content(response_text):
+        """Extract just the message content from OpenClaw response"""
+        import json
+        try:
+            data = json.loads(response_text)
+            if "choices" in data and len(data["choices"]) > 0:
+                content = data["choices"][0].get("message", {}).get("content", "")
+                # Truncate long responses
+                if len(content) > 200:
+                    return content[:200] + "..."
+                return content
+            return response_text[:100]
+        except:
+            return response_text[:100]
+
     logs_html = "".join([
-        f"<tr><td>{l['created_at']}</td><td>{l['sender']}</td><td>{l['target_id']}</td><td style='max-width:400px;word-break:break-all'>{l['message']}</td><td>{l['status_code']}</td></tr>"
+        f"<tr><td>{l['created_at']}</td><td>{l['sender']}</td><td>{l['target_id']}</td><td style='max-width:400px;word-break:break-all'>{l['message']}</td><td>{l['status_code']}</td><td style='max-width:400px;word-break:break-all'>{extract_response_content(l['response'])}</td></tr>"
         for l in logs
     ])
     html = f"""
@@ -283,7 +298,7 @@ async def dashboard(request: Request, admin_key: str = ""):
     {agents_html}</table>
     <br>
     <h3>Recent Conversations (last 100)</h3>
-    <table><tr><th>Time</th><th>From</th><th>To</th><th>Message</th><th>Status</th></tr>
+    <table><tr><th>Time</th><th>From</th><th>To</th><th>Message</th><th>Status</th><th>Response</th></tr>
     {logs_html}</table>
     <br><small>Refresh page to update. Admin key required.</small>
     </body></html>
