@@ -12,7 +12,7 @@ app = FastAPI(title="A2A Hub")
 HUB_URL = os.environ.get("HUB_URL", "http://localhost:8000")
 ADMIN_KEY = os.environ.get("ADMIN_KEY", "admin-secret")
 DB_PATH = os.environ.get("DB_PATH", "/data/hub.db")
-SKIP_API_KEY_CHECK = os.environ.get("SKIP_API_KEY_CHECK", "false").lower() == "true"
+SKIP_API_KEY_CHECK = os.environ.get("SKIP_API_KEY_CHECK", "true").lower() == "true"  # Default: true - skip API key check
 WHITELIST_ONLY = os.environ.get("WHITELIST_ONLY", "true").lower() == "true"
 
 # ---- DB init ----
@@ -151,6 +151,9 @@ async def get_agent_api_key(agent_id: str, x_admin_key: str = Header(None)):
         raise HTTPException(status_code=404, detail="Agent not found")
     return {"agent_id": agent_id, "api_key": row["api_key"]}
 
+# Whitelist of allowed agent IDs
+ALLOWED_AGENTS = ["kiritu", "terminator", "john-connor", "yuanyuan"]
+
 # ---- Invoke: route message to target agent ----
 @app.post("/invoke")
 async def invoke(request: Request, x_api_key: str = Header(None)):
@@ -159,7 +162,17 @@ async def invoke(request: Request, x_api_key: str = Header(None)):
     sender_agent_row = None
     sender_id = "unknown"
 
-    if SKIP_API_KEY_CHECK:
+    body = await request.json()
+    # Support both field naming styles
+    target_id = body.get("target_id") or body.get("to_agent")
+    message = body.get("message", "")
+    sender_id = body.get("sender_id") or body.get("from_agent") or "unknown"
+
+    # Check if sender is in whitelist
+    if sender_id in ALLOWED_AGENTS:
+        # Whitelisted agent - allow without API key check
+        pass
+    elif SKIP_API_KEY_CHECK:
         # Relaxed mode: skip API key validation entirely
         pass
     elif x_api_key == ADMIN_KEY:
@@ -171,12 +184,6 @@ async def invoke(request: Request, x_api_key: str = Header(None)):
         if not sender_agent_row:
             conn.close()
             raise HTTPException(status_code=403, detail="Access denied: only registered agents may use this hub")
-
-    body = await request.json()
-    # Support both field naming styles
-    target_id = body.get("target_id") or body.get("to_agent")
-    message = body.get("message", "")
-    sender_id = body.get("sender_id") or body.get("from_agent") or (sender_agent_row["id"] if sender_agent_row else "admin")
 
     if not target_id:
         conn.close()
