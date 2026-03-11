@@ -276,8 +276,21 @@ async def dashboard(request: Request, admin_key: str = ""):
         except:
             return response_text[:100]
 
+    def format_taipei_time(utc_str):
+        """Convert UTC string to Taiwan time for display"""
+        try:
+            from datetime import datetime
+            # Parse the stored time (assume UTC)
+            dt = datetime.fromisoformat(utc_str.replace('Z', '+00:00'))
+            # Convert to Taiwan timezone
+            taipei_tz = timezone(timedelta(hours=8))
+            dt_taipei = dt.astimezone(taipei_tz)
+            return dt_taipei.strftime("%Y-%m-%d %H:%M:%S")
+        except:
+            return utc_str
+
     logs_html = "".join([
-        f"<tr><td>{l['created_at']}</td><td>{l['sender']}</td><td>{l['target_id']}</td><td style='max-width:400px;word-break:break-all'>{l['message']}</td><td>{l['status_code']}</td><td style='max-width:400px;word-break:break-all'>{extract_response_content(l['response'])}</td></tr>"
+        f"<tr><td>{format_taipei_time(l['created_at'])}</td><td>{l['sender']}</td><td>{l['target_id']}</td><td style='max-width:400px;word-break:break-all'>{l['message']}</td><td>{l['status_code']}</td><td style='max-width:400px;word-break:break-all'>{extract_response_content(l['response'])}</td></tr>"
         for l in logs
     ])
     html = f"""
