@@ -2,7 +2,13 @@ import os
 import sqlite3
 import secrets
 import httpx
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+# Taiwan timezone (UTC+8)
+TAIPEI_TZ = timezone(timedelta(hours=8))
+
+def get_taipei_time():
+    return datetime.now(TAIPEI_TZ).isoformat()
 from fastapi import FastAPI, Request, Header, HTTPException
 from fastapi.responses import JSONResponse, HTMLResponse
 import uvicorn
@@ -90,7 +96,7 @@ async def register_agent(request: Request, x_admin_key: str = Header(None)):
     conn = get_db()
     conn.execute(
         "INSERT OR REPLACE INTO agents (id, name, url, gateway_token, api_key, description, registered_at) VALUES (?,?,?,?,?,?,?)",
-        (agent_id, name, url, gateway_token, api_key, description, datetime.utcnow().isoformat())
+        (agent_id, name, url, gateway_token, api_key, description, get_taipei_time())
     )
     conn.commit()
     conn.close()
@@ -223,7 +229,7 @@ async def invoke(request: Request, x_api_key: str = Header(None)):
 
     conn.execute(
         "INSERT INTO logs (sender, target_id, target_url, message, response, status_code, created_at) VALUES (?,?,?,?,?,?,?)",
-        (sender_id, target_id, endpoint, message, response_text, status_code, datetime.utcnow().isoformat())
+        (sender_id, target_id, endpoint, message, response_text, status_code, get_taipei_time())
     )
     conn.commit()
     conn.close()
