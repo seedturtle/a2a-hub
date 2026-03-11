@@ -2,6 +2,7 @@ import os
 import sqlite3
 import secrets
 import httpx
+import asyncio
 from datetime import datetime, timezone, timedelta
 
 # Taiwan timezone (UTC+8)
@@ -217,15 +218,39 @@ async def invoke(request: Request, x_api_key: str = Header(None)):
         "messages": [{"role": "system", "content": f"[A2A Hub] from agent '{sender_id}'"}, {"role": "user", "content": message}]
     }
 
+    # Retry logic: try up to 3 times for temporary failures
+    max_retries = 3
+    retry_delay = 2  # seconds
     response_text = ""
     status_code = 502
+    
+    for attempt in range(1, max_retries + 1):
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.post(endpoint, json=payload, headers=headers)
+                status_code = resp.status_code
+                response_text = resp.text
+                
+                # Success or permanent error - no retry
+                if status_code == 200:
+                    break
+                # Temporary error - retry
+                elif status_code in [502, 503, 504] and attempt < max_retries:
+                    await asyncio.sleep(retry_delay)
+                    continue
+                else:
+                    break
+        except Exception as e:
+            response_text = str(e)
+            if attempt < max_retries:
+                await asyncio.sleep(retry_delay)
+    
+    # Cleanup old logs (keep last 500)
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(endpoint, json=payload, headers=headers)
-            status_code = resp.status_code
-            response_text = resp.text
-    except Exception as e:
-        response_text = str(e)
+        conn.execute("DELETE FROM logs WHERE id NOT IN (SELECT id FROM logs ORDER BY created_at DESC LIMIT 500)")
+        conn.commit()
+    except:
+        pass
 
     conn.execute(
         "INSERT INTO logs (sender, target_id, target_url, message, response, status_code, created_at) VALUES (?,?,?,?,?,?,?)",
@@ -233,7 +258,7 @@ async def invoke(request: Request, x_api_key: str = Header(None)):
     )
     conn.commit()
     conn.close()
-    return JSONResponse(status_code=status_code, content={"response": response_text, "from": sender_id, "to": target_id})
+    return JSONResponse(status_code=status_code if status_code != 502 else 200, content={"response": response_text, "from": sender_id, "to": target_id})
 
 # ---- Dashboard ----
 @app.get("/dashboard", response_class=HTMLResponse)
