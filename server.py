@@ -187,7 +187,7 @@ async def invoke(request: Request, x_api_key: str = Header(None)):
         conn.close()
         raise HTTPException(status_code=404, detail=f"Target agent '{target_id}' not found")
 
-    target_url = target_row["url"].rstrip("/")
+    target_url = target_row["url"].rstrip("/").rstrip("/a2a")
     gateway_token = target_row["gateway_token"] or ""
 
     # Call OpenClaw's /v1/chat/completions HTTP API
