@@ -152,7 +152,7 @@ async def get_agent_api_key(agent_id: str, x_admin_key: str = Header(None)):
     return {"agent_id": agent_id, "api_key": row["api_key"]}
 
 # Whitelist of allowed agent IDs
-ALLOWED_AGENTS = ["kiritu", "terminator", "john-connor", "yuanyuan", "圓圓"]
+ALLOWED_AGENTS = ["kiritu", "terminator", "john-connor"]
 
 # ---- Invoke: route message to target agent ----
 @app.post("/invoke")
