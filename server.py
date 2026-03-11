@@ -262,7 +262,7 @@ async def dashboard(request: Request, admin_key: str = ""):
         for a in agents
     ])
     logs_html = "".join([
-        f"<tr><td>{l['created_at']}</td><td>{l['sender']}</td><td>{l['target_id']}</td><td style='max-width:300px;word-break:break-all'>{l['message']}</td><td>{l['status_code']}</td><td style='max-width:300px;word-break:break-all'>{l['response']}</td></tr>"
+        f"<tr><td>{l['created_at']}</td><td>{l['sender']}</td><td>{l['target_id']}</td><td style='max-width:400px;word-break:break-all'>{l['message']}</td><td>{l['status_code']}</td></tr>"
         for l in logs
     ])
     html = f"""
@@ -283,7 +283,7 @@ async def dashboard(request: Request, admin_key: str = ""):
     {agents_html}</table>
     <br>
     <h3>Recent Conversations (last 100)</h3>
-    <table><tr><th>Time</th><th>From</th><th>To</th><th>Message</th><th>Status</th><th>Response</th></tr>
+    <table><tr><th>Time</th><th>From</th><th>To</th><th>Message</th><th>Status</th></tr>
     {logs_html}</table>
     <br><small>Refresh page to update. Admin key required.</small>
     </body></html>
